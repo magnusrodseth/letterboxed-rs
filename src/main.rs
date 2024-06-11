@@ -1,5 +1,6 @@
 use clap::Parser;
-use std::collections::{HashMap, HashSet};
+use std::cmp::Reverse;
+use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Result};
@@ -20,8 +21,7 @@ fn load_word_list(file_path: &str) -> Result<Vec<String>> {
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    /// The box of words, separated by commas
-    /// @example "abc,def,ghi,jkl"
+    /// The box of words, separated by commas. An example box would be "abc,def,ghi,jkl".
     #[arg(short, long)]
     grid: String,
 
@@ -117,95 +117,57 @@ impl Grid {
     fn solve(&self) -> Option<Vec<String>> {
         let valid_words = self.generate_words();
 
-        for word in &valid_words {
+        let solution = self.solve_bfs(&valid_words);
+        if let Some(solution) = solution {
+            if self.is_solution_valid(&solution) {
+                return Some(solution);
+            }
+        }
+
+        None
+    }
+
+    fn solve_bfs(&self, valid_words: &[String]) -> Option<Vec<String>> {
+        let mut heap = BinaryHeap::new();
+
+        for word in valid_words {
             let mut used_letters = HashSet::new();
             for ch in word.chars() {
                 used_letters.insert(ch);
             }
+            let mut used_letters_vec: Vec<char> = used_letters.iter().copied().collect();
+            used_letters_vec.sort_unstable();
+            heap.push(Reverse((1, used_letters_vec, vec![word.clone()])));
+        }
 
-            let solution =
-                self.solve_dfs(&valid_words, word.clone(), used_letters, vec![word.clone()]);
-            if let Some(solution) = solution {
-                if self.is_solution_valid(&solution) {
-                    return Some(solution);
+        while let Some(Reverse((count, used_letters_vec, path))) = heap.pop() {
+            let used_letters: HashSet<char> = used_letters_vec.iter().copied().collect();
+            if used_letters.len() == self.all_letters.len() {
+                return Some(path);
+            }
+
+            if count >= self.max_guesses {
+                continue;
+            }
+
+            for word in valid_words {
+                if word.chars().next().unwrap() == path.last().unwrap().chars().last().unwrap()
+                    && !path.contains(word)
+                {
+                    let mut new_used_letters = used_letters.clone();
+                    for ch in word.chars() {
+                        new_used_letters.insert(ch);
+                    }
+                    let mut new_used_letters_vec: Vec<char> =
+                        new_used_letters.iter().copied().collect();
+                    new_used_letters_vec.sort_unstable();
+                    let mut new_path = path.clone();
+                    new_path.push(word.clone());
+                    heap.push(Reverse((count + 1, new_used_letters_vec, new_path)));
                 }
             }
         }
 
-        None
-    }
-
-    fn solve_dfs(
-        &self,
-        valid_words: &[String],
-        current_word: String,
-        used_letters: HashSet<char>,
-        solution: Vec<String>,
-    ) -> Option<Vec<String>> {
-        if used_letters.len() == self.all_letters.len() {
-            return Some(solution);
-        }
-
-        for word in valid_words {
-            if word.chars().next().unwrap() == current_word.chars().last().unwrap()
-                && !solution.contains(word)
-            {
-                let mut new_used_letters = used_letters.clone();
-                for ch in word.chars() {
-                    new_used_letters.insert(ch);
-                }
-                let mut new_solution = solution.clone();
-                new_solution.push(word.clone());
-                let result =
-                    self.solve_dfs(valid_words, word.clone(), new_used_letters, new_solution);
-                if result.is_some() {
-                    return result;
-                }
-            }
-        }
-        None
-    }
-
-    fn solve_recursive(
-        &self,
-        valid_words: &[String],
-        current_word: String,
-        used_letters: HashSet<char>,
-        solution: Vec<String>,
-        guesses: usize,
-        max_guesses: usize,
-    ) -> Option<Vec<String>> {
-        if used_letters.len() == self.all_letters.len() {
-            return Some(solution);
-        }
-
-        if guesses >= max_guesses {
-            return None;
-        }
-
-        for word in valid_words {
-            if word.chars().next().unwrap() == current_word.chars().last().unwrap()
-                && !solution.contains(word)
-            {
-                let mut new_used_letters = used_letters.clone();
-                for ch in word.chars() {
-                    new_used_letters.insert(ch);
-                }
-                let mut new_solution = solution.clone();
-                new_solution.push(word.clone());
-                let result = self.solve_recursive(
-                    valid_words,
-                    word.clone(),
-                    new_used_letters,
-                    new_solution,
-                    guesses + 1,
-                    max_guesses,
-                );
-                if result.is_some() {
-                    return result;
-                }
-            }
-        }
         None
     }
 
@@ -224,17 +186,15 @@ fn main() {
     let args = Args::parse();
 
     if !is_valid_args_length(&args) {
-        println!("Invalid grid formation.");
+        println!("Invalid grid formation. Use `--help` to see the correct format.");
         return;
     }
 
-    let grid_upper = args.grid.to_uppercase();
-
     let dictionary = load_word_list("words.txt").expect("Invalid file path.");
-    let game = Grid::new(grid_upper, dictionary, args.max_guesses);
+    let game = Grid::new(args.grid.to_uppercase(), dictionary, args.max_guesses);
 
     if !game.is_valid() {
-        println!("Invalid grid formation.");
+        println!("Invalid grid formation. Use `--help` to see the correct format.");
         return;
     }
 
