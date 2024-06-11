@@ -8,7 +8,7 @@ Letter Boxed is a popular puzzle game by the New York Times. Try it out [here](h
 
 ```sh
 # Installing the application
-cargo install letterboxed
+cargo install letterboxed-rs
 
 # Running the application
 letterboxed --grid "abc,def,ghi,jkl"

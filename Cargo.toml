@@ -1,5 +1,5 @@
 [package]
-name = "letterboxed"
+name = "letterboxed-rs"
 description = "A solver for the puzzle game Letter Boxed by The New York Times"
 version = "0.1.0"
 edition = "2021"
