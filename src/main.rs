@@ -1,5 +1,5 @@
 use clap::Parser;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Result};
@@ -40,30 +40,44 @@ enum Side {
 struct Grid {
     words: HashMap<Side, Vec<char>>,
     dictionary: Vec<String>,
+    all_letters: HashSet<char>,
 }
 
 impl Grid {
     fn new(grid: String, dictionary: Vec<String>) -> Self {
         let sides = [Side::Top, Side::Right, Side::Bottom, Side::Left];
         let mut words = HashMap::new();
+
+        let mut all_letters = HashSet::new();
         for (side, word) in sides.iter().zip(grid.split(',')) {
-            words.insert(*side, word.chars().collect());
+            let chars: Vec<char> = word.chars().collect();
+            all_letters.extend(&chars);
+            words.insert(*side, chars);
         }
-        Self { words, dictionary }
+
+        Self {
+            words,
+            dictionary,
+            all_letters,
+        }
     }
 
     fn is_valid(&self) -> bool {
-        self.words.len() == 4 && self.words.values().all(|word| word.len() == 3)
+        dbg!(self.words.len());
+        dbg!(self.words.values().all(|word| word.len() == 3));
+        dbg!(self.all_letters.len());
+
+        self.words.len() == 4
+            && self.words.values().all(|word| word.len() == 3)
+            && self.all_letters.len() == 12
     }
 
     fn generate_words(&self) -> Vec<String> {
-        let mut valid_words = Vec::new();
-        for word in &self.dictionary {
-            if self.is_valid_word(word) {
-                valid_words.push(word.clone());
-            }
-        }
-        valid_words
+        self.dictionary
+            .iter()
+            .filter(|&&ref word| self.is_valid_word(word))
+            .cloned()
+            .collect()
     }
 
     /// Words must be at least 3 letters long
@@ -95,10 +109,66 @@ impl Grid {
         }
         None
     }
+
+    fn solve(&self) -> Option<Vec<String>> {
+        let valid_words = self.generate_words();
+
+        for word in &valid_words {
+            let mut used_letters = HashSet::new();
+            for ch in word.chars() {
+                used_letters.insert(ch);
+            }
+
+            let solution =
+                self.solve_recursive(&valid_words, word.clone(), used_letters, vec![word.clone()]);
+            if let Some(solution) = solution {
+                return Some(solution);
+            }
+        }
+
+        None
+    }
+
+    fn solve_recursive(
+        &self,
+        valid_words: &[String],
+        current_word: String,
+        used_letters: HashSet<char>,
+        solution: Vec<String>,
+    ) -> Option<Vec<String>> {
+        if used_letters.len() == self.all_letters.len() {
+            return Some(solution);
+        }
+
+        for word in valid_words {
+            if word.chars().next().unwrap() == current_word.chars().last().unwrap()
+                && !solution.contains(word)
+            {
+                let mut new_used_letters = used_letters.clone();
+                for ch in word.chars() {
+                    new_used_letters.insert(ch);
+                }
+                let mut new_solution = solution.clone();
+                new_solution.push(word.clone());
+                let result =
+                    self.solve_recursive(valid_words, word.clone(), new_used_letters, new_solution);
+                if result.is_some() {
+                    return result;
+                }
+            }
+        }
+        None
+    }
 }
 
 fn main() {
     let args = Args::parse();
+
+    if !is_valid_args_length(&args) {
+        println!("Invalid grid formation.");
+        return;
+    }
+
     let dictionary = load_word_list("words.txt").expect("Invalid file path.");
     let game = Grid::new(args.grid, dictionary);
 
@@ -107,8 +177,10 @@ fn main() {
         return;
     }
 
-    let generated_words = game.generate_words();
-    println!("Generated words: {:?}", generated_words);
+    match game.solve() {
+        Some(solution) => println!("Solution found: {:?}", solution),
+        None => println!("No solution found."),
+    }
 }
 
 #[cfg(test)]
@@ -116,17 +188,6 @@ mod tests {
     use super::*;
 
     const EMPTY_DICTIONARY: Vec<String> = vec![];
-
-    impl Grid {
-        fn new_with_dictionary(grid: String, dictionary: Vec<String>) -> Self {
-            let sides = [Side::Top, Side::Right, Side::Bottom, Side::Left];
-            let mut words = HashMap::new();
-            for (side, word) in sides.iter().zip(grid.split(',')) {
-                words.insert(*side, word.chars().collect());
-            }
-            Self { words, dictionary }
-        }
-    }
 
     #[test]
     fn test_grid_is_valid() {
@@ -188,7 +249,7 @@ mod tests {
             "xyz".to_string(),
             "fij".to_string(),
         ];
-        let grid = Grid::new_with_dictionary("abc,def,ghi,jkl".to_string(), dictionary.clone());
+        let grid = Grid::new("abc,def,ghi,jkl".to_string(), dictionary.clone());
         let generated_words = grid.generate_words();
         let expected_words: Vec<String> = vec!["beg".to_string(), "fij".to_string()];
 
