@@ -71,10 +71,6 @@ impl Grid {
     }
 
     fn is_valid(&self) -> bool {
-        dbg!(self.words.len());
-        dbg!(self.words.values().all(|word| word.len() == 3));
-        dbg!(self.all_letters.len());
-
         self.words.len() == 4
             && self.words.values().all(|word| word.len() == 3)
             && self.all_letters.len() == 12
@@ -127,19 +123,46 @@ impl Grid {
                 used_letters.insert(ch);
             }
 
-            let solution = self.solve_recursive(
-                &valid_words,
-                word.clone(),
-                used_letters,
-                vec![word.clone()],
-                0,
-                self.max_guesses,
-            );
+            let solution =
+                self.solve_dfs(&valid_words, word.clone(), used_letters, vec![word.clone()]);
             if let Some(solution) = solution {
-                return Some(solution);
+                if self.is_solution_valid(&solution) {
+                    return Some(solution);
+                }
             }
         }
 
+        None
+    }
+
+    fn solve_dfs(
+        &self,
+        valid_words: &[String],
+        current_word: String,
+        used_letters: HashSet<char>,
+        solution: Vec<String>,
+    ) -> Option<Vec<String>> {
+        if used_letters.len() == self.all_letters.len() {
+            return Some(solution);
+        }
+
+        for word in valid_words {
+            if word.chars().next().unwrap() == current_word.chars().last().unwrap()
+                && !solution.contains(word)
+            {
+                let mut new_used_letters = used_letters.clone();
+                for ch in word.chars() {
+                    new_used_letters.insert(ch);
+                }
+                let mut new_solution = solution.clone();
+                new_solution.push(word.clone());
+                let result =
+                    self.solve_dfs(valid_words, word.clone(), new_used_letters, new_solution);
+                if result.is_some() {
+                    return result;
+                }
+            }
+        }
         None
     }
 
@@ -185,6 +208,16 @@ impl Grid {
         }
         None
     }
+
+    fn is_solution_valid(&self, solution: &[String]) -> bool {
+        let mut used_letters = HashSet::new();
+        for word in solution {
+            for ch in word.chars() {
+                used_letters.insert(ch);
+            }
+        }
+        used_letters == self.all_letters
+    }
 }
 
 fn main() {
@@ -195,8 +228,10 @@ fn main() {
         return;
     }
 
+    let grid_upper = args.grid.to_uppercase();
+
     let dictionary = load_word_list("words.txt").expect("Invalid file path.");
-    let game = Grid::new(args.grid, dictionary, args.max_guesses);
+    let game = Grid::new(grid_upper, dictionary, args.max_guesses);
 
     if !game.is_valid() {
         println!("Invalid grid formation.");
