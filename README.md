@@ -11,13 +11,13 @@ Letter Boxed is a popular puzzle game by the New York Times. Try it out [here](h
 cargo install letterboxed-rs
 
 # Running the application
-letterboxed --grid "abc,def,ghi,jkl"
+letterboxed-rs --grid "abc,def,ghi,jkl"
 
 # Optionally, you can set the maximum number of guesses to be made
-letterboxed --grid "abc,def,ghi,jkl" --max-guesses 10
+letterboxed-rs --grid "abc,def,ghi,jkl" --max-guesses 10
 
 # Help
-letterboxed --help
+letterboxed-rs --help
 ```
 
 You'll notice that the grid is represented as a comma-separated string of words. Each word is a sequence of characters, and the words are separated by commas. The grid is a square, so the number of characters in each word is the same.
