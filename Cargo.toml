@@ -1,7 +1,14 @@
 [package]
 name = "letterboxed-rs"
+description = "A solver for the puzzle game Letter Boxed by The New York Times"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+authors = ["magnusrodseth"]
+homepage = "https://github.com/magnusrodseth/letterboxed-rs"
+keywords = ["puzzle", "cli", "game", "solver"]
+readme = "README.md"
+repository = "https://github.com/magnusrodseth/letterboxed-rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
