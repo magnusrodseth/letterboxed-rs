@@ -4,6 +4,8 @@ use std::fmt::Debug;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Result};
 
+const DEFAULT_MAX_GUESSES: usize = 6;
+
 fn load_word_list(file_path: &str) -> Result<Vec<String>> {
     let file = File::open(file_path)?;
     let reader = BufReader::new(file);
@@ -22,6 +24,10 @@ struct Args {
     /// @example "abc,def,ghi,jkl"
     #[arg(short, long)]
     grid: String,
+
+    /// The maximum number of guesses to make
+    #[arg(short, long)]
+    max_guesses: Option<usize>,
 }
 
 fn is_valid_args_length(args: &Args) -> bool {
@@ -41,10 +47,11 @@ struct Grid {
     words: HashMap<Side, Vec<char>>,
     dictionary: Vec<String>,
     all_letters: HashSet<char>,
+    max_guesses: usize,
 }
 
 impl Grid {
-    fn new(grid: String, dictionary: Vec<String>) -> Self {
+    fn new(grid: String, dictionary: Vec<String>, max_guesses: Option<usize>) -> Self {
         let sides = [Side::Top, Side::Right, Side::Bottom, Side::Left];
         let mut words = HashMap::new();
 
@@ -59,6 +66,7 @@ impl Grid {
             words,
             dictionary,
             all_letters,
+            max_guesses: max_guesses.unwrap_or(DEFAULT_MAX_GUESSES),
         }
     }
 
@@ -119,8 +127,14 @@ impl Grid {
                 used_letters.insert(ch);
             }
 
-            let solution =
-                self.solve_recursive(&valid_words, word.clone(), used_letters, vec![word.clone()]);
+            let solution = self.solve_recursive(
+                &valid_words,
+                word.clone(),
+                used_letters,
+                vec![word.clone()],
+                0,
+                self.max_guesses,
+            );
             if let Some(solution) = solution {
                 return Some(solution);
             }
@@ -135,9 +149,15 @@ impl Grid {
         current_word: String,
         used_letters: HashSet<char>,
         solution: Vec<String>,
+        guesses: usize,
+        max_guesses: usize,
     ) -> Option<Vec<String>> {
         if used_letters.len() == self.all_letters.len() {
             return Some(solution);
+        }
+
+        if guesses >= max_guesses {
+            return None;
         }
 
         for word in valid_words {
@@ -150,8 +170,14 @@ impl Grid {
                 }
                 let mut new_solution = solution.clone();
                 new_solution.push(word.clone());
-                let result =
-                    self.solve_recursive(valid_words, word.clone(), new_used_letters, new_solution);
+                let result = self.solve_recursive(
+                    valid_words,
+                    word.clone(),
+                    new_used_letters,
+                    new_solution,
+                    guesses + 1,
+                    max_guesses,
+                );
                 if result.is_some() {
                     return result;
                 }
@@ -170,7 +196,7 @@ fn main() {
     }
 
     let dictionary = load_word_list("words.txt").expect("Invalid file path.");
-    let game = Grid::new(args.grid, dictionary);
+    let game = Grid::new(args.grid, dictionary, args.max_guesses);
 
     if !game.is_valid() {
         println!("Invalid grid formation.");
@@ -191,7 +217,7 @@ mod tests {
 
     #[test]
     fn test_grid_is_valid() {
-        let grid = Grid::new("abc,def,ghi,jkl".to_string(), EMPTY_DICTIONARY);
+        let grid = Grid::new("abc,def,ghi,jkl".to_string(), EMPTY_DICTIONARY, None);
         assert_eq!(grid.is_valid(), true);
     }
 
@@ -199,6 +225,7 @@ mod tests {
     fn test_is_valid_args_length() {
         let args = Args {
             grid: "abc,def,ghi,jkl".to_string(),
+            max_guesses: None,
         };
         assert_eq!(is_valid_args_length(&args), true);
     }
@@ -207,37 +234,38 @@ mod tests {
     fn test_is_invalid_args_length() {
         let args = Args {
             grid: "abc,def,ghi".to_string(),
+            max_guesses: None,
         };
         assert_eq!(is_valid_args_length(&args), false);
     }
 
     #[test]
     fn test_grid_has_too_few_letters() {
-        let grid = Grid::new("ab,def,ghi,jkl".to_string(), EMPTY_DICTIONARY);
+        let grid = Grid::new("ab,def,ghi,jkl".to_string(), EMPTY_DICTIONARY, None);
         assert_eq!(grid.is_valid(), false);
     }
 
     #[test]
     fn test_grid_has_too_many_letters() {
-        let grid = Grid::new("abcd,def,ghi,jkl".to_string(), EMPTY_DICTIONARY);
+        let grid = Grid::new("abcd,def,ghi,jkl".to_string(), EMPTY_DICTIONARY, None);
         assert_eq!(grid.is_valid(), false);
     }
 
     #[test]
     fn test_is_valid_word_valid() {
-        let grid = Grid::new("abc,def,ghi,jkl".to_string(), EMPTY_DICTIONARY);
+        let grid = Grid::new("abc,def,ghi,jkl".to_string(), EMPTY_DICTIONARY, None);
         assert!(grid.is_valid_word("beg"));
     }
 
     #[test]
     fn test_is_valid_word_invalid_single_side() {
-        let grid = Grid::new("abc,def,ghi,jkl".to_string(), EMPTY_DICTIONARY);
+        let grid = Grid::new("abc,def,ghi,jkl".to_string(), EMPTY_DICTIONARY, None);
         assert!(!grid.is_valid_word("ace"));
     }
 
     #[test]
     fn test_is_valid_word_invalid_nonexistent_letter() {
-        let grid = Grid::new("abc,def,ghi,jkl".to_string(), EMPTY_DICTIONARY);
+        let grid = Grid::new("abc,def,ghi,jkl".to_string(), EMPTY_DICTIONARY, None);
         assert!(!grid.is_valid_word("xyz"));
     }
 
@@ -249,7 +277,7 @@ mod tests {
             "xyz".to_string(),
             "fij".to_string(),
         ];
-        let grid = Grid::new("abc,def,ghi,jkl".to_string(), dictionary.clone());
+        let grid = Grid::new("abc,def,ghi,jkl".to_string(), dictionary.clone(), None);
         let generated_words = grid.generate_words();
         let expected_words: Vec<String> = vec!["beg".to_string(), "fij".to_string()];
 
